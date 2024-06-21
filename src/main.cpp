@@ -9,7 +9,7 @@
 #define DC1_2 22
 
 #define IN2_1 32  // PWM_1 pin for motor 2
-#define IN2_2 35  // PWM_2 pin for motor 2
+#define IN2_2 14  // PWM_2 pin for motor 2
 #define DC2_1 21  // Encoder pin A for motor 2
 #define DC2_2 19  // Encoder pin B for motor 2
 
@@ -43,7 +43,7 @@
 double input1, output1, setpoint1 = 0, kp1 = 2.6, ki1 = 1, kd1 = 0.08;  // MOTOR 1
 PID myPID1(&input1, &output1, &setpoint1, kp1, ki1, kd1, DIRECT);  // PID_v1
 
-double input2, output2, setpoint2 = 0, kp2 = 2.5, ki2 = 3, kd2 = 0.08;  // MOTOR 2
+double input2, output2, setpoint2 = 0, kp2 = 2.5, ki2 = 1, kd2 = 0.08;  // MOTOR 2
 PID myPID2(&input2, &output2, &setpoint2, kp2, ki2, kd2, DIRECT);  // PID_v1
 
 double input3, output3, setpoint3 = 0, kp3 = 3, ki3 = 6, kd3 = 0.06;  // MOTOR 3
@@ -158,60 +158,60 @@ void setup() {
 
     myPID1.SetMode(AUTOMATIC);  // the PID is turned on
     myPID1.SetOutputLimits(-200, 200);
-    setpoint1 = 0;
+    setpoint1 = 30;
 
     myPID2.SetMode(AUTOMATIC);  // the PID is turned on
     myPID2.SetOutputLimits(-200, 200);
-    setpoint2 = 0;
+    setpoint2 = 30;
 
     myPID3.SetMode(AUTOMATIC);  // the PID is turned on
     myPID3.SetOutputLimits(-200, 200);
-    setpoint3 = 0;
+    setpoint3 = 30;
 
     myPID4.SetMode(AUTOMATIC);  // the PID is turned on
     myPID4.SetOutputLimits(-200, 200);
-    setpoint4 = 0;
+    setpoint4 = 30;
 }
 
 void loop() {
     // getEncoderSpeed();
     // // serial read a setpoint value
-    // if (Serial.available() > 0) {
-    //     String input = Serial.readString();
-    //     int value = input.toInt();
-    //     setpoint1 = value;
-    //     setpoint2 = value;
-    //     setpoint3 = value;
-    //     setpoint4 = value;
-    // }
-    // read input "kp ki kd\n" values for m2  
     if (Serial.available() > 0) {
         String input = Serial.readString();
-        int kp, ki, kd;
-        sscanf(input.c_str(), "%d %d %d", &kp, &ki, &kd);
-        kp2 = kp;
-        ki2 = ki;
-        kd2 = kd;
-        myPID2.SetTunings(kp2, ki2, kd2);
+        int value = input.toInt();
+        setpoint1 = value;
+        setpoint2 = value;
+        setpoint3 = value;
+        setpoint4 = value;
     }
-    // flip setpoint2 0 and 30 every 5 seconds
-    if (millis() % 10000 < 5000) {
-        setpoint2 = 0;
-    } else {
-        setpoint2 = 30;
-    }
+    // read input "kp ki kd\n" values for m2  
+    // if (Serial.available() > 0) {
+    //     String input = Serial.readString();
+    //     int kp, ki, kd;
+    //     sscanf(input.c_str(), "%d %d %d", &kp, &ki, &kd);
+    //     kp2 = kp;
+    //     ki2 = ki;
+    //     kd2 = kd;
+    //     myPID2.SetTunings(kp2, ki2, kd2);
+    // }
+    // // flip setpoint2 0 and 30 every 5 seconds
+    // if (millis() % 10000 < 5000) {
+    //     setpoint2 = 0;
+    // } else {
+    //     setpoint2 = 30;
+    // }
 
     // Read encoder value
-    // input1 = getEncoderSpeed1();
+    input1 = getEncoderSpeed1();
     input2 = getEncoderSpeed2();
-    // input3 = getEncoderSpeed3();
-    // input4 = getEncoderSpeed4();
+    input3 = getEncoderSpeed3();
+    input4 = getEncoderSpeed4();
 
     // Compute PID
-    // myPID1.Compute();
+    myPID1.Compute();
     myPID2.Compute();
-    // myPID3.Compute();
-    // myPID4.Compute();
+    myPID3.Compute();
+    myPID4.Compute();
 
     // Control motor
     controlMotor(output1, PWM_CHANNEL_1_1, PWM_CHANNEL_1_2);
