@@ -2,14 +2,45 @@
 #include <ESP32Encoder.h>
 #include <PID_v1.h>
 
+enum MotorState {
+  STOP = 0,
+  FORWARD = 1,
+  BACKWARD = 2,
+  MOVE_LEFT = 3,
+  MOVE_RIGHT = 4,
+  TURN_LEFT = 5,
+  TURN_RIGHT = 6
+};
+
+MotorState motorState = STOP;
+
+
+#define USE_ROS
+
+#ifdef USE_ROS
+#include <ros.h>
+#include <std_msgs/String.h>
+#include <std_msgs/Int32.h>
+
+void commandCallback(const std_msgs::Int32& msg);
+void executeMotorAction(MotorState state);
+
+// ROS NodeHandle and Publisher/Subscriber
+ros::NodeHandle nh;
+std_msgs::Int32 motorStateMsg;
+ros::Publisher motorStatePub("info_back", &motorStateMsg);
+ros::Subscriber<std_msgs::Int32> commandSub("information", commandCallback);
+#endif
+
+//pins 34-39 cannot use for pwm
 // Define motor and encoder pins for one motor
-#define IN1_1 12
-#define IN1_2 13
-#define DC1_1 23
-#define DC1_2 22
+#define IN1_1 23
+#define IN1_2 22
+#define DC1_1 35
+#define DC1_2 34
 
 #define IN2_1 32  // PWM_1 pin for motor 2
-#define IN2_2 14  // PWM_2 pin for motor 2
+#define IN2_2 33  // PWM_2 pin for motor 2
 #define DC2_1 21  // Encoder pin A for motor 2
 #define DC2_2 19  // Encoder pin B for motor 2
 
@@ -121,6 +152,57 @@ int getEncoderSpeed4() {
     if (dt == 0) return 0;  // avoid division by zero
     return (double)dx / dt;
 }
+void setMotorState(MotorState state) {
+    motorState = state;
+    switch(state) {
+        case STOP:
+            setpoint1 = 0;
+            setpoint2 = 0;
+            setpoint3 = 0;
+            setpoint4 = 0;
+            break;
+        case FORWARD:
+            setpoint1 = 30;
+            setpoint2 = 30;
+            setpoint3 = 30;
+            setpoint4 = 30;
+            break;
+        case BACKWARD:
+            setpoint1 = -30;
+            setpoint2 = -30;
+            setpoint3 = -30;
+            setpoint4 = -30;
+            break;
+        case MOVE_LEFT:
+            setpoint1 = 30;
+            setpoint2 = -30;
+            setpoint3 = 30;
+            setpoint4 = -30;
+            break;
+        case MOVE_RIGHT:
+            setpoint1 = -30;
+            setpoint2 = 30;
+            setpoint3 = -30;
+            setpoint4 = 30;
+            break;
+        case TURN_LEFT:
+            setpoint1 = -30;
+            setpoint2 = 30;
+            setpoint3 = 30;
+            setpoint4 = -30;
+            break;
+        case TURN_RIGHT:
+            setpoint1 = 30;
+            setpoint2 = -30;
+            setpoint3 = -30;
+            setpoint4 = 30;
+            break;
+        default:
+            break;
+    }
+    Serial.print("Motor state: ");
+    Serial.println(state);
+}
 
 void setup() {
     // Initialize encoders
@@ -149,8 +231,27 @@ void setup() {
     ledcAttachPin(IN4_1, PWM_CHANNEL_4_1);
     ledcAttachPin(IN4_2, PWM_CHANNEL_4_2);
 
-    Serial.begin(115200);
-    if (!Serial) return;
+    //set all to 0
+    ledcWrite(PWM_CHANNEL_1_1, 0);
+    ledcWrite(PWM_CHANNEL_1_2, 0);
+    ledcWrite(PWM_CHANNEL_2_1, 0);
+    ledcWrite(PWM_CHANNEL_2_2, 0);
+    ledcWrite(PWM_CHANNEL_3_1, 0);
+    ledcWrite(PWM_CHANNEL_3_2, 0);
+    ledcWrite(PWM_CHANNEL_4_1, 0);
+    ledcWrite(PWM_CHANNEL_4_2, 0);
+
+    #ifndef USE_ROS
+        Serial.begin(115200);
+    #endif
+
+    #ifdef USE_ROS
+        // Initialize ROS node
+        nh.initNode();
+        nh.advertise(motorStatePub);
+        nh.subscribe(commandSub);
+    #endif
+    // if (!Serial) return;
 
     // myPID.SetMode(AUTOMATIC);  // the PID is turned on
     // myPID.SetOutputLimits(-255, 255);
@@ -158,33 +259,45 @@ void setup() {
 
     myPID1.SetMode(AUTOMATIC);  // the PID is turned on
     myPID1.SetOutputLimits(-200, 200);
-    setpoint1 = 30;
+    setpoint1 = 0;
 
     myPID2.SetMode(AUTOMATIC);  // the PID is turned on
     myPID2.SetOutputLimits(-200, 200);
-    setpoint2 = 30;
+    setpoint2 = 0;
 
     myPID3.SetMode(AUTOMATIC);  // the PID is turned on
     myPID3.SetOutputLimits(-200, 200);
-    setpoint3 = 30;
+    setpoint3 = 0;
 
     myPID4.SetMode(AUTOMATIC);  // the PID is turned on
     myPID4.SetOutputLimits(-200, 200);
-    setpoint4 = 30;
+    setpoint4 = 0;
+
+    delay(2000);
 }
 
 void loop() {
+    #ifdef USE_ROS
+        nh.spinOnce();
+    #endif
     // getEncoderSpeed();
-    // // serial read a setpoint value
+    #ifndef USE_ROS
+    // // // serial read a setpoint value
+    // if (Serial.available() > 0) {
+    //     String input = Serial.readString();
+    //     int value = input.toInt();
+    //     setpoint1 = value;
+    //     setpoint2 = value;
+    //     setpoint3 = value;
+    //     setpoint4 = value;
+    // }
+    // serial read a state value
     if (Serial.available() > 0) {
         String input = Serial.readString();
         int value = input.toInt();
-        setpoint1 = value;
-        setpoint2 = value;
-        setpoint3 = value;
-        setpoint4 = value;
+        setMotorState((MotorState)value);
     }
-    // read input "kp ki kd\n" values for m2  
+    // // read input "kp ki kd\n" values for m2  
     // if (Serial.available() > 0) {
     //     String input = Serial.readString();
     //     int kp, ki, kd;
@@ -200,6 +313,7 @@ void loop() {
     // } else {
     //     setpoint2 = 30;
     // }
+    #endif
 
     // Read encoder value
     input1 = getEncoderSpeed1();
@@ -219,6 +333,7 @@ void loop() {
     controlMotor(output3, PWM_CHANNEL_3_1, PWM_CHANNEL_3_2);
     controlMotor(output4, PWM_CHANNEL_4_1, PWM_CHANNEL_4_2);
     
+    #ifndef USE_ROS
     // Print values for plotter
     Serial.print(setpoint1);
     Serial.print(" ");
@@ -238,6 +353,25 @@ void loop() {
     Serial.print(" ");
     Serial.print(output4);
     Serial.println();
-    delay(100);
+    #endif
 
+    delay(100);
 }
+
+#ifdef USE_ROS
+
+// Callback function when recieved command
+void commandCallback(const std_msgs::Int32& msg) {
+    MotorState newMotorState;
+    if(msg.data <= -1 && msg.data >= -6) {
+        newMotorState = (MotorState)(-msg.data);
+    }
+    else {
+        newMotorState = STOP; // other situations
+    }
+    setMotorState(newMotorState);
+    motorStateMsg.data = (motorState);
+    motorStatePub.publish(&motorStateMsg);
+}
+
+#endif
